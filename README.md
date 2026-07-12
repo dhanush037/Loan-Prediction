@@ -14,7 +14,7 @@ Loan-Prediction/
 ├── requirements.txt       # Python dependencies
 ├── data/
 │   ├── README.md          # dataset format and where to get one
-│   └── loan_prediction.csv  # (not included — add your own, see data/README.md)
+│   └── loan_prediction.csv  # Loan approval dataset CSV file containing applicant details
 └── README.md
 ```
 
