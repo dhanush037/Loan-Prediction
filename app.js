@@ -1,173 +1,242 @@
-const SCALER_MEAN = [86683.673, 562.863, 244478.740, 0.313, 0.363];
-const SCALER_SCALE = [41579.090, 155.969, 140420.272, 0.464, 0.481];
-const COEF = [0.8288, 2.4583, -0.9428, -0.0166, -2.1821];
-const INTERCEPT = -0.9702;
-
-// --- Currency conversion ---
-// The model was trained on USD figures, so any amount entered in another
-// currency has to be converted to USD before it's scored. Results are then
-// converted back for display.
-const CURRENCY_SYMBOLS = {
-  USD: '$', EUR: '€', GBP: '£', INR: '₹', JPY: '¥', CAD: 'C$', AUD: 'A$'
-};
-
-// Fallback rates (units of currency per 1 USD), used only if the live
-// rate fetch fails (e.g. offline).
-const FALLBACK_RATES = {
-  USD: 1, EUR: 0.92, GBP: 0.79, INR: 83.5, JPY: 149, CAD: 1.36, AUD: 1.52
-};
-
-let exchangeRates = { ...FALLBACK_RATES };
-
-async function loadExchangeRates() {
-  try {
-    const targets = Object.keys(CURRENCY_SYMBOLS).filter(c => c !== 'USD').join(',');
-    const res = await fetch(`https://api.frankfurter.app/latest?from=USD&to=${targets}`);
-    if (!res.ok) throw new Error('Rate fetch failed');
-    const data = await res.json();
-    exchangeRates = { USD: 1, ...data.rates };
-  } catch (err) {
-    console.warn('Live exchange rates unavailable, using fallback rates.', err);
-    exchangeRates = { ...FALLBACK_RATES };
-  }
-  updateCurrencySymbols();
-}
-
-function currentCurrency() {
-  const el = document.getElementById('input-currency');
-  return el ? el.value : 'USD';
-}
-
-function toUSD(amount, currencyCode) {
-  const rate = exchangeRates[currencyCode] || 1;
-  return amount / rate;
-}
-
-function formatCurrency(amount, currencyCode) {
-  const symbol = CURRENCY_SYMBOLS[currencyCode] || '$';
-  return symbol + Math.round(amount).toLocaleString();
-}
-
-function updateCurrencySymbols() {
-  const code = currentCurrency();
-  const symbol = CURRENCY_SYMBOLS[code] || '$';
-  const incomeSymbol = document.getElementById('income-symbol');
-  const loanSymbol = document.getElementById('loan-symbol');
-  if (incomeSymbol) incomeSymbol.innerText = symbol;
-  if (loanSymbol) loanSymbol.innerText = symbol;
-}
-
-function sigmoid(z) {
-  return 1 / (1 + Math.exp(-z));
-}
-
-function predictApproval(income, credit, loan, employment) {
-  const selfEmployed = employment === 'self' ? 1 : 0;
-  const unemployed = employment === 'unemployed' ? 1 : 0;
-  const raw = [income, credit, loan, selfEmployed, unemployed];
-
-  const scaled = raw.map((v, i) => (v - SCALER_MEAN[i]) / SCALER_SCALE[i]);
-
-  let z = INTERCEPT;
-  const contributions = [];
-  for (let i = 0; i < scaled.length; i++) {
-    const contribution = scaled[i] * COEF[i];
-    z += contribution;
-    contributions.push(contribution);
-  }
-
-  const probApproved = sigmoid(z);
-  return {
-    probApproved,
-    creditContribution: contributions[1],
-    incomeContribution: contributions[0],
-    loanContribution: contributions[2],
-  };
-}
-
-function impactLabel(absContribution) {
-  if (absContribution > 1.0) return 'High Impact';
-  if (absContribution > 0.4) return 'Mod Impact';
-  return 'Low Impact';
-}
-
-function barWidth(absContribution) {
-  return Math.min(95, Math.max(10, absContribution * 40)) + '%';
-}
-
-document.getElementById('input-currency')?.addEventListener('change', updateCurrencySymbols);
-loadExchangeRates();
-
-document.getElementById('prediction-form').addEventListener('submit', function(e) {
-  e.preventDefault();
-
-  const currency = currentCurrency();
-  const incomeEntered = parseFloat(document.getElementById('input-income').value);
-  const credit = parseFloat(document.getElementById('input-credit').value);
-  const loanEntered = parseFloat(document.getElementById('input-loan').value);
-  const employment = document.getElementById('input-employment').value;
-
-  // Convert to USD, since that's what the model was trained on.
-  const income = toUSD(incomeEntered, currency);
-  const loan = toUSD(loanEntered, currency);
-
-  const result = predictApproval(income, credit, loan, employment);
-  const isApproved = result.probApproved > 0.5;
-  const confidencePct = (isApproved ? result.probApproved : 1 - result.probApproved) * 100;
-
-  document.getElementById('result-empty').style.opacity = '0';
-  setTimeout(() => {
-    document.getElementById('result-empty').style.display = 'none';
-    document.getElementById('result-content').style.opacity = '1';
-
-    document.getElementById('sim-id').innerText = 'APL-' + Math.floor(Math.random() * 90000 + 10000);
-
-    const usdNote = document.getElementById('usd-equivalent-note');
-    if (usdNote) {
-      if (currency === 'USD') {
-        usdNote.innerText = '';
-      } else {
-        usdNote.innerText = `Scored as ${formatCurrency(income, 'USD')} income / ${formatCurrency(loan, 'USD')} loan (model runs in USD)`;
-      }
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="styles.css"/>
+<script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={theme:{extend:{"colors":{"secondary-fixed-dim":"#4eddbb","border-slate":"#E2E8F0","warning-amber":"#F59E0B","surface-variant":"#e0e3e5","on-error-container":"#93000a","outline":"#727780","surface-bright":"#f7f9fb","on-surface-variant":"#42474f","secondary-container":"#6cf7d4","inverse-on-surface":"#eff1f3","on-tertiary-fixed":"#0d1c2e","on-primary-fixed":"#001c37","on-surface":"#191c1e","on-primary-fixed-variant":"#07497d","surface":"#f7f9fb","error":"#ba1a1a","surface-container-highest":"#e0e3e5","on-primary":"#ffffff","on-tertiary-container":"#acbbd2","outline-variant":"#c2c7d1","primary":"#00355f","surface-tint":"#2d6197","surface-container-lowest":"#ffffff","surface-container-high":"#e6e8ea","on-background":"#191c1e","primary-fixed":"#d2e4ff","on-secondary-fixed-variant":"#005141","surface-container":"#eceef0","tertiary-fixed-dim":"#b9c7df","surface-container-low":"#f2f4f6","on-tertiary-fixed-variant":"#3a485b","primary-container":"#0f4c81","on-secondary":"#ffffff","on-primary-container":"#8ebdf9","inverse-primary":"#a0c9ff","tertiary-container":"#3d4b5f","surface-dim":"#d8dadc","success-green":"#10B981","surface-white":"#FFFFFF","on-secondary-container":"#00705c","tertiary":"#263447","on-tertiary":"#ffffff","on-secondary-fixed":"#002019","error-red":"#DC2626","inverse-surface":"#2d3133","error-container":"#ffdad6","secondary":"#006b58","on-error":"#ffffff","background":"#f7f9fb","secondary-fixed":"#6ff9d6","tertiary-fixed":"#d5e3fc","primary-fixed-dim":"#a0c9ff"},"borderRadius":{"DEFAULT":"0.25rem","lg":"0.5rem","xl":"0.75rem","full":"9999px"},"spacing":{"margin-desktop":"32px","md":"16px","gutter":"24px","unit":"4px","xs":"4px","lg":"24px","xl":"32px","margin-mobile":"16px","sm":"8px"},"fontFamily":{"display-lg":["Inter"],"body-bold":["Inter"],"body-base":["Inter"],"label-caps":["Inter"],"headline-md":["Inter"],"title-sm":["Inter"],"headline-lg-mobile":["Inter"],"stat-lg":["Inter"]},"fontSize":{"display-lg":["36px",{"lineHeight":"44px","letterSpacing":"-0.02em","fontWeight":"700"}],"body-bold":["16px",{"lineHeight":"24px","letterSpacing":"0","fontWeight":"600"}],"body-base":["16px",{"lineHeight":"24px","letterSpacing":"0","fontWeight":"400"}],"label-caps":["12px",{"lineHeight":"16px","letterSpacing":"0.05em","fontWeight":"600"}],"headline-md":["24px",{"lineHeight":"32px","letterSpacing":"-0.01em","fontWeight":"600"}],"title-sm":["18px",{"lineHeight":"28px","letterSpacing":"0","fontWeight":"600"}],"headline-lg-mobile":["28px",{"lineHeight":"36px","letterSpacing":"-0.02em","fontWeight":"700"}],"stat-lg":["28px",{"lineHeight":"36px","letterSpacing":"-0.01em","fontWeight":"700"}]}}}}</script></head><body class="bg-background font-body-base text-on-surface"><header class="fixed top-0 w-full z-50 bg-surface-white/80 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="h-20 max-w-[1440px] mx-auto px-margin-desktop flex items-center justify-between"><div class="flex items-center gap-sm"><img alt="LoanSense AI Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDb6dVYr8arzqUaaJ6FJS-bWmohgFPdy8H7078UM8FaHkT9vXU1fCJNj4YjB3_-lHwAodh2qXAM_vjfxj-N_2U9x4j9JXAZ0T4cEpOX04-k3G5tFfF4f_ovYut9EfTnDx7PRcwsNOadMeMHz4_c3unWO-3FIYzTp9wYuVoykW9bHqTWJ5l9Jo-moW0fGFAmXFFpoBJ7NfL-f1AwgjCQufqzUVn2c79A6OTIMXKXwUC_oF4Aajj9yD3UYw"/><span class="font-headline-md text-headline-md text-primary">LoanSense AI</span></div><nav class="hidden md:flex items-center gap-xl" data-active-classes="text-primary font-body-bold"><a aria-current="page" class="transition-colors text-primary font-body-bold" data-path="home" href="#">Home</a><a class="text-body-base text-on-surface-variant hover:text-primary transition-colors" data-path="about" href="#">About</a><a class="text-body-base text-on-surface-variant hover:text-primary transition-colors" data-path="workflow" href="#">Workflow</a><a class="text-body-base text-on-surface-variant hover:text-primary transition-colors" data-path="dataset" href="#">Dataset</a><a class="text-body-base text-on-surface-variant hover:text-primary transition-colors" data-path="model" href="#">Model</a><a class="text-body-base text-on-surface-variant hover:text-primary transition-colors" data-path="results" href="#">Results</a></nav><div class="flex items-center gap-md"><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="w-full pt-20 bg-background"><div class="flex flex-col w-full font-body-base text-on-surface bg-background">
+<!-- CSS for Animations & Layout specific tweaks -->
+<style>
+    @keyframes fade-in-up {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
     }
-
-    const badge = document.getElementById('decision-badge');
-    const riskLevel = document.getElementById('risk-level');
-    const riskBar = document.getElementById('risk-bar');
-    const reason = document.getElementById('decision-reason');
-    const conf = document.getElementById('conf-score');
-
-    conf.innerText = confidencePct.toFixed(1);
-
-    if (isApproved) {
-      badge.innerText = 'Approved';
-      badge.className = 'px-6 py-2 rounded-full font-body-bold text-[20px] bg-success-green/10 text-secondary border border-success-green/20 mb-2 transition-all';
-
-      riskLevel.innerText = 'Low Risk';
-      riskLevel.className = 'font-body-bold text-secondary';
-      riskBar.className = 'bg-secondary h-2 rounded-full transition-all duration-1000';
-      riskBar.style.width = (100 - confidencePct).toFixed(0) + '%';
-      reason.innerText = "The model's learned coefficients favor approval for this applicant profile.";
-    } else {
-      badge.innerText = 'Rejected';
-      badge.className = 'px-6 py-2 rounded-full font-body-bold text-[20px] bg-error-container text-error border border-error/20 mb-2 transition-all';
-
-      riskLevel.innerText = 'High Risk';
-      riskLevel.className = 'font-body-bold text-error';
-      riskBar.className = 'bg-error h-2 rounded-full transition-all duration-1000';
-      riskBar.style.width = confidencePct.toFixed(0) + '%';
-      reason.innerText = "The model's learned coefficients weigh against approval for this applicant profile.";
+    .animate-fade-in-up {
+      animation: fade-in-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      opacity: 0;
     }
-
-    const creditAbs = Math.abs(result.creditContribution);
-    const incomeAbs = Math.abs(result.incomeContribution);
-    const loanAbs = Math.abs(result.loanContribution);
-
-    document.getElementById('driver-credit-label').innerText = impactLabel(creditAbs);
-    document.getElementById('driver-credit-bar').style.width = barWidth(creditAbs);
-    document.getElementById('driver-income-label').innerText = impactLabel(incomeAbs);
-    document.getElementById('driver-income-bar').style.width = barWidth(incomeAbs);
-    document.getElementById('driver-loan-label').innerText = impactLabel(loanAbs);
-    document.getElementById('driver-loan-bar').style.width = barWidth(loanAbs);
-  }, 300);
-});
+    .delay-100 { animation-delay: 100ms; }
+    .delay-200 { animation-delay: 200ms; }
+    .delay-300 { animation-delay: 300ms; }
+    
+    .glass-card {
+      background: rgba(255, 255, 255, 0.7);
+      backdrop-filter: blur(12px);
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+    }
+  </style>
+<!-- 1. Hero Section -->
+<section class="relative w-full pt-16 pb-24 lg:pt-32 lg:pb-40 overflow-hidden flex items-center justify-center min-h-[90vh]" id="home">
+<div class="absolute inset-0 z-0 pointer-events-none">
+<div class="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-primary-fixed/30 blur-[120px]"></div>
+<div class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-secondary-fixed/20 blur-[100px]"></div>
+</div>
+<div class="max-w-[1440px] w-full mx-auto px-margin-mobile md:px-margin-desktop relative z-10 flex flex-col lg:flex-row items-center gap-12 lg:gap-24">
+<div class="w-full lg:w-1/2 flex flex-col items-start text-left">
+<div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-container-high border border-border-slate mb-6 animate-fade-in-up">
+<span class="material-symbols-outlined text-[16px] text-secondary">model_training</span>
+<span class="text-label-caps text-on-surface-variant">ML-Powered Underwriting v2.4</span>
+</div>
+<h1 class="font-display-lg text-display-lg lg:text-[56px] lg:leading-[64px] text-on-surface mb-6 animate-fade-in-up delay-100 tracking-tight">
+          Intelligent Loan<br/><span class="text-primary">Decisioning</span>
+</h1>
+<p class="font-title-sm text-title-sm text-on-surface-variant mb-10 max-w-[500px] animate-fade-in-up delay-200">
+          Predict loan eligibility with high-precision machine learning. Deploy institutional-grade decision trees to evaluate risk profiles in milliseconds.
+        </p>
+<div class="flex flex-col sm:flex-row gap-4 w-full sm:w-auto animate-fade-in-up delay-300">
+<button class="px-8 py-4 bg-primary text-on-primary rounded-lg font-body-bold hover:bg-on-primary-fixed-variant transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex items-center justify-center gap-2" onclick="document.getElementById('prediction-engine').scrollIntoView({behavior: 'smooth'})">
+            Start Prediction
+            <span class="material-symbols-outlined text-[20px]">arrow_downward</span>
+</button>
+<a class="px-8 py-4 bg-surface-white text-on-surface rounded-lg font-body-bold hover:bg-surface-container transition-all flex items-center justify-center shadow-sm" href="#about">
+            Explore Architecture
+          </a>
+</div>
+</div>
+<div class="w-full lg:w-1/2 relative animate-fade-in-up delay-200">
+<div class="relative w-full aspect-[4/3] rounded-2xl overflow-hidden shadow-2xl bg-surface-container flex items-center justify-center p-4 group">
+<div class="absolute inset-0 bg-gradient-to-tr from-primary/5 to-secondary/5 opacity-50 transition-opacity group-hover:opacity-100"></div>
+<img class="w-full h-full object-cover rounded-xl shadow-inner relative z-10" data-alt="3D stylized illustration of a modern banking desk with multiple screens displaying financial charts and a classical bank building model, futuristic yet professional, light blue and teal tones, high quality render" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCIp95toStF44bbGjuvCbOMuMt16VrF9wWURERWHdlWdt9Zk1iqFA4LUy8LjMSfWmcRfV0iHxH8sXg-onLietuduXAhNU8aIo2oSLnaeOZHUnEfW5xHjCLePl1H17NsDQCymA400wnJWgybnQfbdogZH2l01FgpJV0o7AUSlAU5F5GP0lFjR77CZmGFAM07v_k2HjNptM0vCMQZrNlRp2dh-_uf6oqr_ztZwO4BQyYMXyoUSskH-A6y1Q"/>
+</div>
+</div>
+</div>
+</section>
+<!-- 2 & 3. Prediction Engine (Split Panel) -->
+<section class="w-full py-24 bg-surface-bright border-y border-border-slate relative" id="prediction-engine">
+<div class="max-w-[1440px] w-full mx-auto px-margin-mobile md:px-margin-desktop">
+<div class="mb-12 text-center max-w-2xl mx-auto">
+<h2 class="font-headline-md text-headline-md text-on-surface mb-4">Live Prediction Engine</h2>
+<p class="font-body-base text-on-surface-variant">Enter applicant financial metrics below to simulate the Logistic Regression model's real-time underwriting process.</p>
+</div>
+<div class="flex flex-col lg:flex-row gap-8 lg:gap-12">
+<!-- Input Form (Left Panel - 5 cols equivalent) -->
+<div class="w-full lg:w-[40%] bg-surface-white rounded-xl shadow-md p-6 md:p-8">
+<div class="flex items-center gap-3 mb-8 pb-4 border-b border-border-slate">
+<span class="material-symbols-outlined text-primary bg-primary-fixed p-2 rounded-lg">edit_document</span>
+<h3 class="font-title-sm text-title-sm">Applicant Profile</h3>
+</div>
+<form class="flex flex-col gap-6" id="prediction-form">
+<div class="flex flex-col gap-2">
+<label class="font-label-caps text-on-surface-variant uppercase tracking-wider">Currency</label>
+<div class="relative">
+<select class="w-full h-11 px-4 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-base focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/15 transition-all text-on-surface appearance-none cursor-pointer" id="input-currency">
+<option selected="" value="USD">USD — US Dollar</option>
+<option value="EUR">EUR — Euro</option>
+<option value="GBP">GBP — British Pound</option>
+<option value="INR">INR — Indian Rupee</option>
+<option value="JPY">JPY — Japanese Yen</option>
+<option value="CAD">CAD — Canadian Dollar</option>
+<option value="AUD">AUD — Australian Dollar</option>
+</select>
+<span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant">expand_more</span>
+</div>
+</div>
+<div class="flex flex-col gap-2">
+<label class="font-label-caps text-on-surface-variant uppercase tracking-wider">Applicant Income</label>
+<div class="relative">
+<span class="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant font-body-base" id="income-symbol">$</span>
+<input class="w-full h-11 pl-8 pr-4 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-base focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/15 transition-all text-on-surface" id="input-income" placeholder="e.g. 5000" required="" type="number" value="86500"/>
+</div>
+</div>
+<div class="flex flex-col gap-2">
+<label class="font-label-caps text-on-surface-variant uppercase tracking-wider">Credit Score</label>
+<input class="w-full h-11 px-4 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-base focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/15 transition-all text-on-surface" id="input-credit" max="850" min="300" placeholder="e.g. 700" required="" type="number" value="700"/>
+</div>
+<div class="flex flex-col gap-2">
+<label class="font-label-caps text-on-surface-variant uppercase tracking-wider">Requested Loan Amount</label>
+<div class="relative">
+<span class="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant font-body-base" id="loan-symbol">$</span>
+<input class="w-full h-11 pl-8 pr-4 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-base focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/15 transition-all text-on-surface" id="input-loan" placeholder="e.g. 200000" required="" type="number" value="150000"/>
+</div>
+</div>
+<div class="flex flex-col gap-2">
+<label class="font-label-caps text-on-surface-variant uppercase tracking-wider">Employment Status</label>
+<div class="relative">
+<select class="w-full h-11 px-4 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-base focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/15 transition-all text-on-surface appearance-none cursor-pointer" id="input-employment">
+<option selected="" value="employed">Employed</option>
+<option value="self">Self-Employed</option>
+<option value="unemployed">Unemployed</option>
+</select>
+<span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant">expand_more</span>
+</div>
+</div>
+<button class="mt-4 w-full h-12 bg-secondary text-on-secondary rounded-lg font-body-bold hover:bg-on-secondary-fixed-variant transition-all shadow-md flex items-center justify-center gap-2" type="submit">
+              Calculate Prediction
+              <span class="material-symbols-outlined text-[20px]">analytics</span>
+</button>
+</form>
+</div>
+<!-- Results Panel (Right Panel - 7 cols equivalent) -->
+<div class="w-full lg:w-[60%] bg-surface-white rounded-xl shadow-md p-6 md:p-8 flex flex-col relative overflow-hidden">
+<!-- Empty State (Shown initially) -->
+<div class="absolute inset-0 bg-surface-white z-10 flex flex-col items-center justify-center p-8 text-center transition-opacity duration-300" id="result-empty">
+<div class="w-20 h-20 rounded-full bg-surface-container flex items-center justify-center mb-6">
+<span class="material-symbols-outlined text-[32px] text-on-surface-variant">query_stats</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-surface mb-2">Awaiting Data</h3>
+<p class="font-body-base text-on-surface-variant max-w-sm">Submit the applicant profile to run the predictive model and generate an algorithmic decision.</p>
+</div>
+<!-- Result Content (Hidden initially) -->
+<div class="flex-1 flex flex-col opacity-0 transition-opacity duration-500" id="result-content">
+<div class="flex items-center justify-between mb-8 pb-4 border-b border-border-slate">
+<h3 class="font-title-sm text-title-sm text-on-surface">Algorithmic Decision</h3>
+<span class="text-label-caps text-on-surface-variant font-mono">ID: <span id="sim-id">---</span></span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+<!-- Decision Badge Card -->
+<div class="bg-surface-container-lowest border border-border-slate rounded-xl p-6 flex flex-col items-center justify-center text-center">
+<div class="text-label-caps text-on-surface-variant uppercase tracking-wider mb-4">Model Output</div>
+<div class="px-6 py-2 rounded-full font-body-bold text-[20px] bg-success-green/10 text-secondary border border-success-green/20 mb-2 transition-all" id="decision-badge">
+                    Approved
+                  </div>
+<div class="text-sm text-on-surface-variant mt-2 font-mono">Confidence: <span id="conf-score">94.2</span>%</div>
+</div>
+<!-- Risk Metrics Card -->
+<div class="bg-surface-container-lowest border border-border-slate rounded-xl p-6 flex flex-col justify-center">
+<div class="text-label-caps text-on-surface-variant uppercase tracking-wider mb-4">Risk Assessment</div>
+<div class="flex items-center justify-between mb-2">
+<span class="font-body-base">Risk Level</span>
+<span class="font-body-bold text-success-green" id="risk-level">Low</span>
+</div>
+<div class="w-full bg-surface-variant rounded-full h-2 mb-6 overflow-hidden">
+<div class="bg-success-green h-2 rounded-full transition-all duration-1000" id="risk-bar" style="width: 15%"></div>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px] text-on-surface-variant">info</span>
+<span class="text-sm text-on-surface-variant leading-tight" id="decision-reason">Income-to-loan ratio and credit score meet prime criteria thresholds.</span>
+</div>
+<p class="text-xs text-on-surface-variant/70 font-mono mt-3" id="usd-equivalent-note"></p>
+</div>
+</div>
+</div>
+<!-- Feature Contributions (Bar chart simulation) -->
+<div class="mt-auto">
+<div class="text-label-caps text-on-surface-variant uppercase tracking-wider mb-4">Key Decision Drivers</div>
+<div class="space-y-4" id="driver-bars">
+<div>
+<div class="flex justify-between text-sm mb-1"><span class="font-mono">Credit_Score</span><span class="font-mono text-primary" id="driver-credit-label">High Impact</span></div>
+<div class="w-full bg-surface-variant rounded-sm h-1.5"><div class="bg-primary h-1.5 rounded-sm" id="driver-credit-bar" style="width: 85%"></div></div>
+</div>
+<div>
+<div class="flex justify-between text-sm mb-1"><span class="font-mono">Applicant_Income</span><span class="font-mono text-primary" id="driver-income-label">High Impact</span></div>
+<div class="w-full bg-surface-variant rounded-sm h-1.5"><div class="bg-primary h-1.5 rounded-sm" id="driver-income-bar" style="width: 65%"></div></div>
+</div>
+<div>
+<div class="flex justify-between text-sm mb-1"><span class="font-mono">Loan_Amount</span><span class="font-mono text-outline" id="driver-loan-label">Mod Impact</span></div>
+<div class="w-full bg-surface-variant rounded-sm h-1.5"><div class="bg-outline h-1.5 rounded-sm" id="driver-loan-bar" style="width: 35%"></div></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- 4. Business Context (About) -->
+<section class="w-full py-24 bg-background" id="about">
+<div class="max-w-[1440px] w-full mx-auto px-margin-mobile md:px-margin-desktop grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+<div class="lg:col-span-5 relative">
+<div class="aspect-square rounded-2xl overflow-hidden bg-surface-container relative">
+<img class="w-full h-full object-cover" data-alt="Abstract rendering of financial data flows, wireframes of building structures turning into digital nodes, professional corporate banking aesthetic, deep blues and cool grays" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCHuw80ph54cyfG9yrXdtYjODlJgRsYiugtnq5ZkUtfzsLyhG2WmzckhpQVv7P092RarPNB3bcop2hC7tgcn1HHOHKLnUOb7ciJRsY1VC78ifuh_PImWIPA58KMvV7DIG0TsAvfxBE9v1P69jgI9b8G-M6OaNsQpVIg5M-jMrxsfIzE7y9qFaV1dhvbfU19UpGrcCDsEDVxiAfxbzZjyYRwiCFHG8gOlt84ZFhrZlsBcnTmdBPsmvsMsA"/>
+<!-- Decorative stats floating over image -->
+<div class="absolute bottom-6 left-6 right-6 glass-card rounded-xl p-4 flex justify-between items-center">
+<div>
+<div class="text-xs text-on-surface-variant font-body-bold uppercase tracking-wide">Processing Speed</div>
+<div class="font-stat-lg text-stat-lg text-primary">~12ms</div>
+</div>
+<div class="h-8 w-px bg-border-slate"></div>
+<div>
+<div class="text-xs text-on-surface-variant font-body-bold uppercase tracking-wide">Historical Accuracy</div>
+<div class="font-stat-lg text-stat-lg text-secondary">83.3%</div>
+</div>
+</div>
+</div>
+</div>
+<div class="lg:col-span-6 lg:col-start-7 flex flex-col justify-center">
+<span class="text-primary font-label-caps uppercase tracking-widest mb-4">Problem Statement</span>
+<h2 class="font-display-lg text-display-lg text-on-surface mb-6">Transforming Subjective Underwriting into Algorithmic Truth</h2>
+<p class="font-body-base text-on-surface-variant mb-6 text-lg leading-relaxed">
+            Traditional loan approval processes are inherently bottlenecked by human review, subjective biases, and inconsistent application of lending criteria. This friction delays capital deployment and increases operational overhead for financial institutions.
+          </p>
+<p class="font-body-base text-on-surface-variant mb-8 leading-relaxed">
+            LoanSense AI was engineered to address this inefficiency. By training a Logistic Regression classifier on historical lending outcomes, we deliver an automated underwriting engine that evaluates risk profiles instantaneously, with decisions grounded in the model's learned coefficients.
+          </p>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+<div class="flex items-start gap-4 p-4 rounded-lg bg-surface-bright border border-border-slate">
+<span class="material-symbols-outlined text-secondary mt-1">speed</span>
+<div>
+<h4 class="font-body-bold mb-1">Accelerated Decisions</h4>
+<p class="text-sm text-on-surface-variant">Reduce application review time from days to milliseconds.</p>
+</div>
+</div>
+<div class="flex items-start gap-4 p-4 rounded-lg bg-surface-bright border border-border-slate">
+<span class="material-symbols-outlined text-secondary mt-1">account_balance</span>
+<div>
+<h4 class="font-body-bold mb-1">Risk Mitigation</h4>
+<p class="text-sm text-on-surface-variant">Mathematically enforced lending criteria minimizes defaults.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+</div></main><footer class="w-full bg-surface-container border-t border-slate py-xl"><div class="max-w-[1440px] mx-auto px-margin-desktop flex flex-col md:flex-row justify-between items-center gap-lg text-on-surface-variant"><div class="flex flex-col gap-xs"><span class="font-body-bold text-primary">LoanSense AI</span><p class="text-label-caps">Algorithmic Authority in Lending</p></div><div class="text-center md:text-right text-sm font-body-base"><p>Developed by LoanSense Engineering Team</p><p class="opacity-70 mt-xs">Institutional ML Prediction Framework © 2024</p></div></div></footer>
+<script src="app.js"></script>
+</body></html>
