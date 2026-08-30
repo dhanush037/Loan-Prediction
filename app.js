@@ -3,6 +3,60 @@ const SCALER_SCALE = [41579.090, 155.969, 140420.272, 0.464, 0.481];
 const COEF = [0.8288, 2.4583, -0.9428, -0.0166, -2.1821];
 const INTERCEPT = -0.9702;
 
+// --- Currency conversion ---
+// The model was trained on USD figures, so any amount entered in another
+// currency has to be converted to USD before it's scored. Results are then
+// converted back for display.
+const CURRENCY_SYMBOLS = {
+  USD: '$', EUR: '€', GBP: '£', INR: '₹', JPY: '¥', CAD: 'C$', AUD: 'A$'
+};
+
+// Fallback rates (units of currency per 1 USD), used only if the live
+// rate fetch fails (e.g. offline).
+const FALLBACK_RATES = {
+  USD: 1, EUR: 0.92, GBP: 0.79, INR: 83.5, JPY: 149, CAD: 1.36, AUD: 1.52
+};
+
+let exchangeRates = { ...FALLBACK_RATES };
+
+async function loadExchangeRates() {
+  try {
+    const targets = Object.keys(CURRENCY_SYMBOLS).filter(c => c !== 'USD').join(',');
+    const res = await fetch(`https://api.frankfurter.app/latest?from=USD&to=${targets}`);
+    if (!res.ok) throw new Error('Rate fetch failed');
+    const data = await res.json();
+    exchangeRates = { USD: 1, ...data.rates };
+  } catch (err) {
+    console.warn('Live exchange rates unavailable, using fallback rates.', err);
+    exchangeRates = { ...FALLBACK_RATES };
+  }
+  updateCurrencySymbols();
+}
+
+function currentCurrency() {
+  const el = document.getElementById('input-currency');
+  return el ? el.value : 'USD';
+}
+
+function toUSD(amount, currencyCode) {
+  const rate = exchangeRates[currencyCode] || 1;
+  return amount / rate;
+}
+
+function formatCurrency(amount, currencyCode) {
+  const symbol = CURRENCY_SYMBOLS[currencyCode] || '$';
+  return symbol + Math.round(amount).toLocaleString();
+}
+
+function updateCurrencySymbols() {
+  const code = currentCurrency();
+  const symbol = CURRENCY_SYMBOLS[code] || '$';
+  const incomeSymbol = document.getElementById('income-symbol');
+  const loanSymbol = document.getElementById('loan-symbol');
+  if (incomeSymbol) incomeSymbol.innerText = symbol;
+  if (loanSymbol) loanSymbol.innerText = symbol;
+}
+
 function sigmoid(z) {
   return 1 / (1 + Math.exp(-z));
 }
@@ -41,13 +95,21 @@ function barWidth(absContribution) {
   return Math.min(95, Math.max(10, absContribution * 40)) + '%';
 }
 
+document.getElementById('input-currency')?.addEventListener('change', updateCurrencySymbols);
+loadExchangeRates();
+
 document.getElementById('prediction-form').addEventListener('submit', function(e) {
   e.preventDefault();
 
-  const income = parseFloat(document.getElementById('input-income').value);
+  const currency = currentCurrency();
+  const incomeEntered = parseFloat(document.getElementById('input-income').value);
   const credit = parseFloat(document.getElementById('input-credit').value);
-  const loan = parseFloat(document.getElementById('input-loan').value);
+  const loanEntered = parseFloat(document.getElementById('input-loan').value);
   const employment = document.getElementById('input-employment').value;
+
+  // Convert to USD, since that's what the model was trained on.
+  const income = toUSD(incomeEntered, currency);
+  const loan = toUSD(loanEntered, currency);
 
   const result = predictApproval(income, credit, loan, employment);
   const isApproved = result.probApproved > 0.5;
@@ -59,6 +121,15 @@ document.getElementById('prediction-form').addEventListener('submit', function(e
     document.getElementById('result-content').style.opacity = '1';
 
     document.getElementById('sim-id').innerText = 'APL-' + Math.floor(Math.random() * 90000 + 10000);
+
+    const usdNote = document.getElementById('usd-equivalent-note');
+    if (usdNote) {
+      if (currency === 'USD') {
+        usdNote.innerText = '';
+      } else {
+        usdNote.innerText = `Scored as ${formatCurrency(income, 'USD')} income / ${formatCurrency(loan, 'USD')} loan (model runs in USD)`;
+      }
+    }
 
     const badge = document.getElementById('decision-badge');
     const riskLevel = document.getElementById('risk-level');
