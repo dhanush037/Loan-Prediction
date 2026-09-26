@@ -14,8 +14,10 @@ Requires:
 """
 
 import pandas as pd
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV, StratifiedKFold
 from sklearn.metrics import accuracy_score, recall_score, roc_auc_score
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
@@ -58,6 +60,12 @@ def load_and_prepare_data(path: str):
         {"Approved": 1, "Rejected": 0}
     )
 
+    # Engineered feature: how large the requested loan is relative to the
+    # applicant's income. This is the single strongest predictor in most
+    # loan-approval datasets and the raw columns alone don't expose it
+    # directly to a linear model.
+    data["Debt_to_Income"] = data["Loan_Amount"] / data["Applicant_Income"]
+
     return data
 
 
@@ -75,25 +83,48 @@ def evaluate_model(name, model, X_train, X_test, y_train, y_test):
     return model
 
 
+def build_logreg_pipeline():
+    """StandardScaler + LogisticRegression, tuned over C via stratified 5-fold CV.
+
+    ~300 rows is too small to trust a single train/test split for model
+    selection, so GridSearchCV picks the regularization strength using
+    cross-validated ROC-AUC. The held-out test set below is then only used
+    as a final, independent sanity check on the winning model.
+    """
+    pipeline = Pipeline([
+        ("scaler", StandardScaler()),
+        ("clf", LogisticRegression(max_iter=1000)),
+    ])
+    param_grid = {"clf__C": [0.01, 0.1, 1, 10, 100]}
+    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    return GridSearchCV(pipeline, param_grid, scoring="roc_auc", cv=cv)
+
+
 def main():
     data = load_and_prepare_data(DATA_PATH)
 
     employment_dummy_cols = [c for c in data.columns if c.startswith("Is_")]
-    features = ["Applicant_Income", "Credit_Score", "Loan_Amount"] + employment_dummy_cols
+    features = (
+        ["Applicant_Income", "Credit_Score", "Loan_Amount", "Debt_to_Income"]
+        + employment_dummy_cols
+    )
     X = data[features]
     y = data["Loan_Approval_Status"]
 
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
+        X, y, test_size=0.2, random_state=42, stratify=y
     )
 
     evaluate_model("Decision Tree", DecisionTreeClassifier(), X_train, X_test, y_train, y_test)
     evaluate_model("Random Forest", RandomForestClassifier(), X_train, X_test, y_train, y_test)
-    evaluate_model(
+
+    logreg_search = evaluate_model(
         "Logistic Regression",
-        LogisticRegression(max_iter=1000),
+        build_logreg_pipeline(),
         X_train, X_test, y_train, y_test,
     )
+    print("Best C (via 5-fold CV):", logreg_search.best_params_["clf__C"])
+    print("Best CV ROC-AUC:", logreg_search.best_score_)
 
 
 if __name__ == "__main__":
