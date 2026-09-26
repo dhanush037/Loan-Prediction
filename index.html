@@ -73,16 +73,21 @@
 <h3 class="font-title-sm text-title-sm">Applicant Profile</h3>
 </div>
 <form class="flex flex-col gap-6" id="prediction-form">
+<div class="flex flex-col gap-2 p-4 rounded-lg bg-surface-container-lowest border border-dashed border-outline-variant">
+<div class="flex items-center justify-between">
+<label class="font-label-caps text-on-surface-variant uppercase tracking-wider">Credit Score</label>
+<span class="text-[11px] text-on-surface-variant flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">bookmark</span>Saved profile</span>
+</div>
+<input class="w-full h-11 px-4 bg-surface-white border border-outline-variant rounded-lg font-body-base focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/15 transition-all text-on-surface" id="input-credit" max="850" min="300" placeholder="e.g. 700" required="" type="number" value="700"/>
+<p class="text-[11px] text-on-surface-variant">Remembered on this device so you don't re-enter it for every application.</p>
+</div>
+<div class="h-px bg-border-slate"></div>
 <div class="flex flex-col gap-2">
 <label class="font-label-caps text-on-surface-variant uppercase tracking-wider">Applicant Income (USD)</label>
 <div class="relative">
 <span class="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant font-body-base">$</span>
 <input class="w-full h-11 pl-8 pr-4 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-base focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/15 transition-all text-on-surface" id="input-income" placeholder="e.g. 5000" required="" type="number" value="86500"/>
 </div>
-</div>
-<div class="flex flex-col gap-2">
-<label class="font-label-caps text-on-surface-variant uppercase tracking-wider">Credit Score</label>
-<input class="w-full h-11 px-4 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-base focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/15 transition-all text-on-surface" id="input-credit" max="850" min="300" placeholder="e.g. 700" required="" type="number" value="700"/>
 </div>
 <div class="flex flex-col gap-2">
 <label class="font-label-caps text-on-surface-variant uppercase tracking-wider">Requested Loan Amount (USD)</label>
