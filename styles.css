@@ -23,3 +23,7 @@
 ::-webkit-scrollbar {
   display: none;
 }
+
+section[id] {
+  scroll-margin-top: 80px;
+}
