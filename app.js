@@ -5,6 +5,33 @@ const SCALER_SCALE = [42240.976044, 155.899837, 140809.141919, 4.277155, 0.46180
 const COEF = [1.608054, 3.166321, -1.553622, 0.312045, -0.293842, -2.945177];
 const INTERCEPT = -1.187694;
 
+const CREDIT_SCORE_STORAGE_KEY = 'loansense_credit_score';
+
+function restoreSavedCreditScore() {
+  try {
+    const saved = localStorage.getItem(CREDIT_SCORE_STORAGE_KEY);
+    if (saved !== null) {
+      document.getElementById('input-credit').value = saved;
+    }
+  } catch (e) {
+    // localStorage unavailable (e.g. private browsing) - fall back to the default value.
+  }
+}
+
+function persistCreditScore() {
+  try {
+    const value = document.getElementById('input-credit').value;
+    if (value !== '') {
+      localStorage.setItem(CREDIT_SCORE_STORAGE_KEY, value);
+    }
+  } catch (e) {
+    // Ignore - persistence is a convenience, not a requirement.
+  }
+}
+
+restoreSavedCreditScore();
+document.getElementById('input-credit').addEventListener('change', persistCreditScore);
+
 function sigmoid(z) {
   return 1 / (1 + Math.exp(-z));
 }
