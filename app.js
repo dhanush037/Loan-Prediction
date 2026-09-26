@@ -32,6 +32,41 @@ function persistCreditScore() {
 restoreSavedCreditScore();
 document.getElementById('input-credit').addEventListener('change', persistCreditScore);
 
+// Nav active-state: a link is "active" when the section its href points to
+// is the one currently in view. Several links can point at the same
+// section (Workflow/Dataset both point at #prediction-engine, Model/Results
+// both point at #about), so more than one link may be active at once.
+const NAV_LINKS = Array.from(document.querySelectorAll('#main-nav a'));
+
+function setActiveNavSection(sectionId) {
+  NAV_LINKS.forEach((link) => {
+    const isActive = link.getAttribute('href') === '#' + sectionId;
+    link.classList.toggle('text-primary', isActive);
+    link.classList.toggle('font-body-bold', isActive);
+    link.classList.toggle('text-body-base', !isActive);
+    link.classList.toggle('text-on-surface-variant', !isActive);
+  });
+}
+
+const observedSections = ['home', 'prediction-engine', 'about']
+  .map((id) => document.getElementById(id))
+  .filter(Boolean);
+
+if (observedSections.length && 'IntersectionObserver' in window) {
+  const sectionObserver = new IntersectionObserver(
+    (entries) => {
+      const visible = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+      if (visible) {
+        setActiveNavSection(visible.target.id);
+      }
+    },
+    { rootMargin: '-80px 0px -60% 0px', threshold: [0, 0.25, 0.5, 0.75, 1] }
+  );
+  observedSections.forEach((section) => sectionObserver.observe(section));
+}
+
 function sigmoid(z) {
   return 1 / (1 + Math.exp(-z));
 }
