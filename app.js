@@ -1,7 +1,9 @@
-const SCALER_MEAN = [86683.673, 562.863, 244478.740, 0.313, 0.363];
-const SCALER_SCALE = [41579.090, 155.969, 140420.272, 0.464, 0.481];
-const COEF = [0.8288, 2.4583, -0.9428, -0.0166, -2.1821];
-const INTERCEPT = -0.9702;
+// Synced from loan_prediction.py's print_js_sync_constants().
+// Feature order: [Applicant_Income, Credit_Score, Loan_Amount, Debt_to_Income, Is_Self-Employed, Is_Unemployed]
+const SCALER_MEAN = [85818.429167, 559.177083, 251479.395833, 4.254690, 0.308333, 0.370833];
+const SCALER_SCALE = [42240.976044, 155.899837, 140809.141919, 4.277155, 0.461805, 0.483028];
+const COEF = [1.608054, 3.166321, -1.553622, 0.312045, -0.293842, -2.945177];
+const INTERCEPT = -1.187694;
 
 function sigmoid(z) {
   return 1 / (1 + Math.exp(-z));
@@ -10,7 +12,8 @@ function sigmoid(z) {
 function predictApproval(income, credit, loan, employment) {
   const selfEmployed = employment === 'self' ? 1 : 0;
   const unemployed = employment === 'unemployed' ? 1 : 0;
-  const raw = [income, credit, loan, selfEmployed, unemployed];
+  const debtToIncome = loan / income;
+  const raw = [income, credit, loan, debtToIncome, selfEmployed, unemployed];
 
   const scaled = raw.map((v, i) => (v - SCALER_MEAN[i]) / SCALER_SCALE[i]);
 
@@ -25,9 +28,10 @@ function predictApproval(income, credit, loan, employment) {
   const probApproved = sigmoid(z);
   return {
     probApproved,
-    creditContribution: contributions[1],
     incomeContribution: contributions[0],
+    creditContribution: contributions[1],
     loanContribution: contributions[2],
+    dtiContribution: contributions[3],
   };
 }
 
@@ -91,6 +95,7 @@ document.getElementById('prediction-form').addEventListener('submit', function(e
     const creditAbs = Math.abs(result.creditContribution);
     const incomeAbs = Math.abs(result.incomeContribution);
     const loanAbs = Math.abs(result.loanContribution);
+    const dtiAbs = Math.abs(result.dtiContribution);
 
     document.getElementById('driver-credit-label').innerText = impactLabel(creditAbs);
     document.getElementById('driver-credit-bar').style.width = barWidth(creditAbs);
@@ -98,5 +103,7 @@ document.getElementById('prediction-form').addEventListener('submit', function(e
     document.getElementById('driver-income-bar').style.width = barWidth(incomeAbs);
     document.getElementById('driver-loan-label').innerText = impactLabel(loanAbs);
     document.getElementById('driver-loan-bar').style.width = barWidth(loanAbs);
+    document.getElementById('driver-dti-label').innerText = impactLabel(dtiAbs);
+    document.getElementById('driver-dti-bar').style.width = barWidth(dtiAbs);
   }, 300);
 });
