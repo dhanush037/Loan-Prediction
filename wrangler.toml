@@ -1,0 +1,13 @@
+name = "loan-prediction"
+main = "src/index.js"
+compatibility_date = "2026-09-25"
+
+[assets]
+directory = "./"
+binding = "ASSETS"
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[previews]
