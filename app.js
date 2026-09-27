@@ -67,6 +67,49 @@ if (observedSections.length && 'IntersectionObserver' in window) {
   observedSections.forEach((section) => sectionObserver.observe(section));
 }
 
+// Currency conversion: the model was trained on USD-scale figures, so any
+// non-USD input gets converted to USD before scoring. Rates are USD -> X
+// (e.g. currencyRates.INR = how many INR per 1 USD).
+const FALLBACK_RATES = {
+  USD: 1,
+  EUR: 0.92,
+  GBP: 0.79,
+  INR: 83.5,
+  JPY: 149.5,
+  CAD: 1.36,
+  AUD: 1.52,
+};
+let currencyRates = { ...FALLBACK_RATES };
+
+async function loadCurrencyRates() {
+  try {
+    const symbols = Object.keys(FALLBACK_RATES).filter((c) => c !== 'USD').join(',');
+    const response = await fetch(`https://api.frankfurter.app/latest?base=USD&symbols=${symbols}`);
+    if (!response.ok) throw new Error('Rate fetch failed');
+    const data = await response.json();
+    currencyRates = { USD: 1, ...data.rates };
+  } catch (e) {
+    // Network error or API down - the hardcoded FALLBACK_RATES already in
+    // currencyRates keep the form usable, just with slightly stale rates.
+  }
+}
+
+function convertToUSD(amount, currencyCode) {
+  const rate = currencyRates[currencyCode] || 1;
+  return amount / rate;
+}
+
+function updateCurrencySymbols() {
+  const select = document.getElementById('input-currency');
+  const symbol = select.options[select.selectedIndex].dataset.symbol || '$';
+  document.getElementById('income-currency-symbol').innerText = symbol;
+  document.getElementById('loan-currency-symbol').innerText = symbol;
+}
+
+loadCurrencyRates();
+document.getElementById('input-currency').addEventListener('change', updateCurrencySymbols);
+updateCurrencySymbols();
+
 function sigmoid(z) {
   return 1 / (1 + Math.exp(-z));
 }
@@ -110,10 +153,14 @@ function barWidth(absContribution) {
 document.getElementById('prediction-form').addEventListener('submit', function(e) {
   e.preventDefault();
 
-  const income = parseFloat(document.getElementById('input-income').value);
+  const currency = document.getElementById('input-currency').value;
+  const incomeRaw = parseFloat(document.getElementById('input-income').value);
   const credit = parseFloat(document.getElementById('input-credit').value);
-  const loan = parseFloat(document.getElementById('input-loan').value);
+  const loanRaw = parseFloat(document.getElementById('input-loan').value);
   const employment = document.getElementById('input-employment').value;
+
+  const income = convertToUSD(incomeRaw, currency);
+  const loan = convertToUSD(loanRaw, currency);
 
   const result = predictApproval(income, credit, loan, employment);
   const isApproved = result.probApproved > 0.5;
