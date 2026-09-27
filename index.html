@@ -83,16 +83,32 @@
 </div>
 <div class="h-px bg-border-slate"></div>
 <div class="flex flex-col gap-2">
-<label class="font-label-caps text-on-surface-variant uppercase tracking-wider">Applicant Income (USD)</label>
+<label class="font-label-caps text-on-surface-variant uppercase tracking-wider">Currency</label>
 <div class="relative">
-<span class="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant font-body-base">$</span>
+<select class="w-full h-11 px-4 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-base focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/15 transition-all text-on-surface appearance-none cursor-pointer" id="input-currency">
+<option data-symbol="$" selected="" value="USD">USD ($)</option>
+<option data-symbol="€" value="EUR">EUR (€)</option>
+<option data-symbol="£" value="GBP">GBP (£)</option>
+<option data-symbol="₹" value="INR">INR (₹)</option>
+<option data-symbol="¥" value="JPY">JPY (¥)</option>
+<option data-symbol="$" value="CAD">CAD ($)</option>
+<option data-symbol="$" value="AUD">AUD ($)</option>
+</select>
+<span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant">expand_more</span>
+</div>
+<p class="text-[11px] text-on-surface-variant" id="currency-rate-note">Amounts are converted to USD before scoring, since the model was trained on USD-scale data.</p>
+</div>
+<div class="flex flex-col gap-2">
+<label class="font-label-caps text-on-surface-variant uppercase tracking-wider">Applicant Income</label>
+<div class="relative">
+<span class="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant font-body-base" id="income-currency-symbol">$</span>
 <input class="w-full h-11 pl-8 pr-4 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-base focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/15 transition-all text-on-surface" id="input-income" placeholder="e.g. 5000" required="" type="number" value="86500"/>
 </div>
 </div>
 <div class="flex flex-col gap-2">
-<label class="font-label-caps text-on-surface-variant uppercase tracking-wider">Requested Loan Amount (USD)</label>
+<label class="font-label-caps text-on-surface-variant uppercase tracking-wider">Requested Loan Amount</label>
 <div class="relative">
-<span class="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant font-body-base">$</span>
+<span class="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant font-body-base" id="loan-currency-symbol">$</span>
 <input class="w-full h-11 pl-8 pr-4 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-base focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/15 transition-all text-on-surface" id="input-loan" placeholder="e.g. 200000" required="" type="number" value="150000"/>
 </div>
 </div>
